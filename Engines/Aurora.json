@@ -37,7 +37,7 @@
             "both_options"      : "Hash=16 Threads=1",
             "both_time_control" : "120.0+1.2",
             "workload_size"     : 8
-	},
+	}
     },
 
     "tune_presets" : {
