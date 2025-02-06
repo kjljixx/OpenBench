@@ -1,6 +1,6 @@
 {
     "private" : false,
-    "nps"     : 20000,
+    "nps"     : 25000,
     "source"  : "https://github.com/kjljixx/Aurora-Chess-Engine",
 
     "build" : {
@@ -33,17 +33,17 @@
             "workload_size"     : 8
         },
 	
-	"VLTC" : {
+	      "VLTC" : {
             "both_options"      : "Hash=64 Threads=1",
             "both_time_control" : "120.0+1.2",
             "workload_size"     : 8
-	}
+	      }
     },
 
     "tune_presets" : {
 
         "default" : {
-            "book_name" : "UHO_4060_v2.epd",
+            "book_name" : "UHO_Lichess_4852_v1.epd",
             "win_adj"   : "movecount=3 score=400",
             "draw_adj"  : "movenumber=40 movecount=8 score=10"
         }
