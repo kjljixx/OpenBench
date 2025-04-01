@@ -57,9 +57,9 @@
             "workload_size" : 128
         },
 
-        "40k Nodes" : {
+        "450 Nodes" : {
             "both_options"      : "Threads=1 Hash=16",
-            "both_time_control" : "N=40000"
+            "both_time_control" : "N=450"
         }
     }
 }
