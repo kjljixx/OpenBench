@@ -26,7 +26,7 @@ import traceback
 
 from OpenSite.settings import PROJECT_PATH
 
-OPENBENCH_STATIC_VERSION = 'v5'
+OPENBENCH_STATIC_VERSION = 'v9'
 
 OPENBENCH_CONFIG          = None # Initialized by OpenBench/apps.py
 OPENBENCH_CONFIG_CHECKSUM = None # Initialized by OpenBench/apps.py
@@ -100,14 +100,18 @@ def load_engine_config(engine_name):
 
 def verify_general_config(conf):
 
-    assert type(conf.get("client_version"  ) == int)
-    assert type(conf.get("client_repo_url" ) == str)
-    assert type(conf.get("client_repo_ref" ) == str)
+    assert type(conf.get('client_version'  ) == int)
+    assert type(conf.get('client_repo_url' ) == str)
+    assert type(conf.get('client_repo_ref' ) == str)
 
-    assert type(conf.get("use_cross_approval"         ) == bool)
-    assert type(conf.get("require_login_to_view"      ) == bool)
-    assert type(conf.get("require_manual_registration") == bool)
-    assert type(conf.get("balance_engine_throughputs" ) == bool)
+    assert type(conf.get('fastchess_min_version') == str)
+    assert type(conf.get('fastchess_repo_url') == str)
+    assert type(conf.get('fastchess_repo_ref') == str)
+
+    assert type(conf.get('use_cross_approval'         ) == bool)
+    assert type(conf.get('require_login_to_view'      ) == bool)
+    assert type(conf.get('require_manual_registration') == bool)
+    assert type(conf.get('balance_engine_throughputs' ) == bool)
 
 def verify_engine_basics(conf):
 
@@ -178,6 +182,12 @@ def verify_engine_test_preset(test_preset):
 def verify_engine_tune_preset(tune_preset):
 
     valid_keys = [
+
+        'both_branch',
+        'both_bench',
+        'both_network',
+        'both_options',
+        'both_time_control',
 
         'dev_branch',
         'dev_bench',

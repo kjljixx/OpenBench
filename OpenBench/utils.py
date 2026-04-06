@@ -44,6 +44,7 @@ from OpenBench.stats import TrinomialSPRT, PentanomialSPRT
 
 
 import OpenBench.views
+import OpenBench.model_utils
 
 
 class TimeControl(object):
@@ -79,7 +80,7 @@ class TimeControl(object):
             moves = None if moves == '' else moves.rstrip('/')
             inc   = 0.0  if inc   is None else inc.lstrip('+')
 
-            # Format the time control for cutechess cleanly
+            # Format the time control for match runner cleanly
             if moves is None: return '%.1f+%.2f' % (float(base), float(inc))
             return '%d/%.1f+%.2f' % (int(moves), float(base), float(inc))
 
@@ -340,21 +341,12 @@ def network_default(request, engine, network):
 
 def network_delete(request, engine, network):
 
-    # Don't allow deletion of important networks
-    if network.default or network.was_default:
-        error = 'You may not delete Default, or previous Default networks.'
-        return OpenBench.views.redirect(request, '/networks/%s/' % (engine), error=error)
+    message, success = OpenBench.model_utils.network_delete(network)
 
-    # Save information before deleting the Network Model
-    status = 'Deleted %s for %s' % (network.name, network.engine)
-    sha256 = network.sha256; network.delete()
-
-    # Only delete the actual file if no other engines use it
-    if not Network.objects.filter(sha256=sha256):
-        FileSystemStorage().delete(sha256)
-
-    # Report this, and refer to the Engine specific view
-    return OpenBench.views.redirect(request, '/networks/%s/' % (engine), status=status)
+    if success:
+        return OpenBench.views.redirect(request, '/networks/%s/' % (engine), status=message)
+    else:
+        return OpenBench.views.redirect(request, '/networks/%s/' % (engine), error=message)
 
 def network_download(request, engine, network):
 
@@ -427,7 +419,20 @@ def update_test(request, machine):
     # Pentanomial Implementation
     LL, LD, DD, DW, WW = map(int, request.POST['pentanomial'].split())
 
+    # SPSA Delta update vector; might not have this
+    raw_spsa_delta = request.POST.get('spsa_delta', '')
+    spsa_delta     = json.loads(raw_spsa_delta) if raw_spsa_delta else []
+
     with transaction.atomic():
+
+        # MASSIVE risk for concurrent access to the Test. select_for_update() will lock the row,
+        # which correctly ensures no other entity can modify it. HOWEVER, spsa_run and the various
+        # spsa_run.parameters are NOT locked via this query. This is okay because no other location
+        # in OpenBench would be modifying the contents of those models.
+        #
+        # ALL of the updates here, even the trivial ones to the Profile and Machine, are wrapped in
+        # same transaction.atomic(). The sole purpose and utility of that is to ensure either EVERYTHING
+        # gets updated as per this function, or NOTHING gets updated.
 
         test = Test.objects.select_for_update().get(id=test_id)
 
@@ -473,12 +478,15 @@ def update_test(request, machine):
 
         elif test.test_mode == 'SPSA':
 
-            # Update each parameter, as determined by the Worker
-            for name, param in test.spsa['parameters'].items():
-                x = param['value'] + float(request.POST['spsa_%s' % (name)])
-                param['value'] = max(param['min'], min(param['max'], x))
+            # Apply updates to every Parameter, ensuring clipping
+            parameters = list(test.spsa_run.parameters.order_by('index'))
+            for delta, param in zip(spsa_delta, parameters):
+                param.value = max(param.min_value, min(param.max_value, param.value + delta))
 
-            test.finished = test.games >= 2 * test.spsa['pairs_per'] * test.spsa['iterations']
+            # Bulk update to fire off all the .save()s
+            SPSAParameter.objects.bulk_update(parameters, ['value'])
+
+            test.finished = test.games >= 2 * test.spsa_run.pairs_per * test.spsa_run.iterations
 
         elif test.test_mode == 'DATAGEN':
 
@@ -487,31 +495,31 @@ def update_test(request, machine):
 
         test.save()
 
-    # Update Result object; No risk from concurrent access
-    Result.objects.filter(id=result_id).update(
-        games    = F('games'   ) + games,
-        losses   = F('losses'  ) + losses,
-        draws    = F('draws'   ) + draws,
-        wins     = F('wins'    ) + wins,
-        LL       = F('LL'      ) + LL,
-        LD       = F('LD'      ) + LD,
-        DD       = F('DD'      ) + DD,
-        DW       = F('DW'      ) + DW,
-        WW       = F('WW'      ) + WW,
-        crashes  = F('crashes' ) + crashes,
-        timeloss = F('timeloss') + timelosses,
-        updated  = timezone.now()
-    )
+        # Update Result object; No risk from concurrent access
+        Result.objects.filter(id=result_id).update(
+            games    = F('games'   ) + games,
+            losses   = F('losses'  ) + losses,
+            draws    = F('draws'   ) + draws,
+            wins     = F('wins'    ) + wins,
+            LL       = F('LL'      ) + LL,
+            LD       = F('LD'      ) + LD,
+            DD       = F('DD'      ) + DD,
+            DW       = F('DW'      ) + DW,
+            WW       = F('WW'      ) + WW,
+            crashes  = F('crashes' ) + crashes,
+            timeloss = F('timeloss') + timelosses,
+            updated  = timezone.now()
+        )
 
-    # Update Profile object; No risk from concurrent access
-    Profile.objects.filter(user=Machine.objects.get(id=machine_id).user).update(
-        games=F('games') + games,
-        updated=timezone.now()
-    )
+        # Update Profile object; Some risk from concurrent access
+        Profile.objects.filter(user=Machine.objects.select_for_update().get(id=machine_id).user).update(
+            games=F('games') + games,
+            updated=timezone.now()
+        )
 
-    # Update Machine object; No risk from concurrent access
-    Machine.objects.filter(id=machine_id).update(
-        updated=timezone.now()
-    )
+        # Update Machine object; No meaningful risk from concurrent access
+        Machine.objects.filter(id=machine_id).update(
+            updated=timezone.now()
+        )
 
     return [{}, { 'stop' : True }][test.finished]

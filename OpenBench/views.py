@@ -18,20 +18,22 @@
 #                                                                             #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-import os, hashlib, datetime, json, secrets, sys, re
+import csv, io, os, json, secrets
 
 import django.http
 import django.shortcuts
 import django.contrib.auth
 
 import OpenBench.config
+import OpenBench.model_utils
+import OpenBench.spsa_utils
 import OpenBench.utils
 
 from OpenBench.workloads.create_workload import create_workload
 from OpenBench.workloads.get_workload import get_workload
 from OpenBench.workloads.modify_workload import modify_workload
 from OpenBench.workloads.verify_workload import verify_workload
-from OpenBench.workloads.view_workload import view_workload
+from OpenBench.workloads.view_workload import view_workload, fetch_results
 
 from OpenBench.config import OPENBENCH_CONFIG, OPENBENCH_CONFIG_CHECKSUM, OPENBENCH_STATIC_VERSION
 from OpenSite.settings import PROJECT_PATH
@@ -467,7 +469,7 @@ def workload(request, workload_type, pk, action=None):
     if action != None:
         return modify_workload(request, pk, action)
 
-    if not (workload := Test.objects.filter(id=int(pk)).first()):
+    if not (workload := Test.objects.select_related('spsa_run').filter(id=int(pk)).first()):
         return redirect(request, '/index/', error='No such Workload exists')
 
     # Trying to view a Tune as a Test, for example
@@ -552,7 +554,7 @@ def scripts(request):
         return networks(request, engine, 'upload', name)
 
     if request.POST['action'] == 'CREATE_TEST':
-        return create_test(request)
+        return new_workload(request, "TEST")
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                              CLIENT HOOK VIEWS                              #
@@ -564,20 +566,20 @@ def verify_worker(function):
 
         # Get the machine, assuming it exists
         try: machine = Machine.objects.get(id=int(args[0].POST['machine_id']))
-        except: return JsonResponse({ 'error' : 'Bad Machine Id' })
+        except: return JsonResponse({ 'error' : 'Bad Client Version: Bad Machine Id' })
 
         # Ensure the Client is using the same version as the Server
         if machine.info['client_ver'] != OPENBENCH_CONFIG['client_version']:
             expected_ver = OPENBENCH_CONFIG['client_version']
             return JsonResponse({ 'error' : 'Bad Client Version: Expected %d' % (expected_ver)})
 
-        # Use the secret token as our soft verification
-        if machine.secret != args[0].POST['secret']:
-            return JsonResponse({ 'error' : 'Invalid Secret Token' })
-
         # Prompt the worker to soft-restart if its config is out of date
         if machine.info.get('OPENBENCH_CONFIG_CHECKSUM') != OPENBENCH_CONFIG_CHECKSUM:
-            return JsonResponse({ 'error' : 'Server Configuration Changed' })
+            return JsonResponse({ 'error' : 'Bad Client Version: Server Configuration Changed' })
+
+        # Use the secret token as our soft verification
+        if machine.secret != args[0].POST['secret']:
+            return JsonResponse({ 'error' : 'Bad Client Version: Invalid Secret Token' })
 
         # Otherwise, carry on, and pass along the machine
         return function(*args, machine)
@@ -600,6 +602,21 @@ def client_version_ref(request):
     })
 
 @csrf_exempt
+def client_match_runner_version_ref(request):
+
+    # Verify the User's credentials
+    try: user = authenticate(request, True)
+    except UnableToAuthenticate:
+        return JsonResponse({ 'error' : 'Bad Credentials' })
+
+    # Enough information to build the right Fastchess version
+    return JsonResponse({
+        'fastchess_min_version' : OPENBENCH_CONFIG['fastchess_min_version'],
+        'fastchess_repo_url'    : OPENBENCH_CONFIG['fastchess_repo_url'],
+        'fastchess_repo_ref'    : OPENBENCH_CONFIG['fastchess_repo_ref'],
+    })
+
+@csrf_exempt
 def client_get_build_info(request):
 
     ## Information pulled from the config about how to build each engine.
@@ -619,13 +636,9 @@ def client_worker_info(request):
     except UnableToAuthenticate:
         return JsonResponse({ 'error' : 'Bad Credentials' })
 
-    # Attempt to fetch the Machine, or create a new one
+    # Create a new Machine for this session
     info    = json.loads(request.POST['system_info'])
-    machine = OpenBench.utils.get_machine(info['machine_id'], user, info)
-
-    # Provided an invalid machine_id, but just create a new machine
-    if not machine:
-        machine = OpenBench.utils.get_machine('None', user, info)
+    machine = OpenBench.utils.get_machine('None', user, info)
 
     # Save the machine's latest information and Secret Token for this session
     machine.info   = info
@@ -826,17 +839,14 @@ def api_networks(request, engine):
 
     if engine in OPENBENCH_CONFIG['engines'].keys():
 
-        if not (network := Network.objects.filter(engine=engine, default=True).first()):
-            return api_response({ 'error' : 'Engine does not have a default Network' })
-
-        default = {
-            'sha'    : network.sha256, 'name'    : network.name,
-            'author' : network.author, 'created' : str(network.created) }
+        default = None
+        if (network := Network.objects.filter(engine=engine, default=True).first()):
+            default = OpenBench.model_utils.network_to_dict(network)
 
         networks = [
-          { 'sha'    : network.sha256, 'name'    : network.name,
-            'author' : network.author, 'created' : str(network.created) }
-            for network in Network.objects.filter(engine=engine) ]
+            OpenBench.model_utils.network_to_dict(network)
+            for network in Network.objects.filter(engine=engine)
+        ]
 
         return api_response({ 'default' : default, 'networks' : networks })
 
@@ -859,6 +869,21 @@ def api_network_download(request, engine, identifier):
         return OpenBench.utils.network_download(request, engine, network)
 
     return api_response({ 'error' : 'Engine not found. Check /api/config/ for a full list' })
+
+@csrf_exempt
+def api_network_delete(request, engine, identifier):
+
+    if not api_authenticate(request):
+        return api_response({ 'error' : 'API requires authentication for this server' })
+
+    if not api_authenticate(request, require_enabled=True):
+        return api_response({ 'error' : 'API requires authentication for this endpoint' })
+
+    if not (network := OpenBench.utils.network_disambiguate(engine, identifier)):
+        return api_response({ 'error' : 'Network %s for Engine %s not found' % (identifier, engine) })
+
+    message, success = OpenBench.model_utils.network_delete(network)
+    return api_response({ 'success' if success else 'error' : message })
 
 @csrf_exempt
 def api_build_info(request):
@@ -896,7 +921,7 @@ def api_pgns(request, pgn_id):
     except: return api_response({ 'error' : 'Requested Workload Id does not exist' })
 
     # 2. Make sure there actually is a PGN attached to the Workload
-    pgn_path = FileSystemStorage('Media/PGNs').path('%d.pgn.tar' % (pgn_id))
+    pgn_path = FileSystemStorage().path('PGNs/%d.pgn.tar' % (pgn_id))
     if not os.path.exists(pgn_path):
         return api_response({ 'error' : 'Unable to find PGN for Workload #%d' % (pgn_id) })
 
@@ -921,6 +946,44 @@ def api_pgns(request, pgn_id):
     response['Content-Length'] = os.path.getsize(pgn_path)
     response['Content-Disposition'] = 'attachment; filename=%d.pgn.tar' % (pgn_id)
     return response
+
+@csrf_exempt
+def api_spsa(request, workload_id, query):
+
+    # 0. Make sure the request has the correct permissions
+    if not api_authenticate(request):
+        return api_response({ 'error' : 'API requires authentication for this server' })
+
+    # 1. Make sure the workload actually exists for the requested SPSA session
+    try: workload = Test.objects.get(pk=workload_id)
+    except: return api_response({ 'error' : 'Requested Workload Id does not exist' })
+
+    if query == 'inputs':
+        return HttpResponse(OpenBench.spsa_utils.spsa_original_input(workload), content_type='text/plain')
+
+    if query == 'outputs':
+        return HttpResponse(OpenBench.spsa_utils.spsa_optimal_values(workload), content_type='text/plain')
+
+    if query == 'digest':
+        return HttpResponse(OpenBench.spsa_utils.spsa_param_digest(workload), content_type='text/plain')
+
+    if query == 'perturbation':
+        return api_response({ 'perturbation' : OpenBench.spsa_utils.spsa_workload_assignment_dict(workload, 4) })
+
+    valid_endpoints = [ 'inputs', 'outputs', 'digest', 'perturbation' ]
+    return api_response({ 'error' : 'Valid /query/ endpoints are: [ %s ]' % (', '.join(valid_endpoints)) })
+
+@csrf_exempt
+def api_workload_results(request, workload_id):
+
+    if not api_authenticate(request):
+        return api_response({ 'error' : 'API requires authentication for this server' })
+
+    try: workload = Test.objects.get(pk=workload_id)
+    except: return api_response({ 'error' : 'Requested Workload Id does not exist' })
+
+    truncated, results_json = fetch_results(workload_id, force=True)
+    return JsonResponse({'results' : results_json})
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                                BUSINESS VIEWS                               #
