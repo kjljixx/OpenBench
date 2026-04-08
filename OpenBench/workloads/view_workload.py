@@ -27,11 +27,13 @@
 
 import datetime
 import json
+import math
 
 from django.db.models import BooleanField, ExpressionWrapper, F, Q
 from django.utils import timezone
 
 import OpenBench.views
+import OpenBench.utils
 from OpenBench.models import *
 
 def view_workload(request, workload, workload_type):
@@ -49,10 +51,12 @@ def view_workload(request, workload, workload_type):
     if workload_type == 'TEST':
         data['type']= workload_type
         data['dev_text'] = 'Dev'
+        data['dev_base_diff'] = OpenBench.utils.test_repo_diff_text(workload)
 
     if workload_type == 'TUNE':
         data['type'] = workload_type
         data['dev_text'] = ''
+        data['spsa_history'] = json.dumps(fetch_spsa_history(workload))
 
     if workload_type == 'DATAGEN':
         data['type'] = workload_type
@@ -98,3 +102,63 @@ def fetch_results(workload, force):
     results = [{ **result, 'updated' : result['updated'].timestamp() } for result in qs]
 
     return False, results
+
+def fetch_spsa_history(workload, max_points=1500):
+
+    if workload.test_mode != 'SPSA':
+        return { 'series': [], 'max_iteration': 0 }
+
+    params = list(workload.spsa_run.parameters.order_by('index'))
+    if not params:
+        return { 'series': [], 'max_iteration': workload.spsa_run.iterations }
+
+    start_values = {
+        param.name: float(param.start) if param.is_float else int(round(param.start))
+        for param in params
+    }
+
+    snapshots = list(
+        workload.spsa_run.history.order_by('games', 'id').values('iteration', 'values')
+    )
+
+    points = []
+    if not snapshots or float(snapshots[0]['iteration']) > 0.0:
+        points.append({ 'iteration': 0.0, 'values': start_values })
+
+    points.extend(snapshots)
+
+    current_values = {
+        param.name: float(param.value) if param.is_float else int(round(param.value))
+        for param in params
+    }
+    current_iteration = workload.games / (2 * workload.spsa_run.pairs_per)
+
+    if not points or points[-1].get('values') != current_values or float(points[-1]['iteration']) != current_iteration:
+        points.append({ 'iteration': current_iteration, 'values': current_values })
+
+    if len(points) > max_points:
+        stride = max(1, math.ceil(len(points) / max_points))
+        points = points[::stride]
+        if points[-1]['iteration'] != current_iteration:
+            points.append({ 'iteration': current_iteration, 'values': current_values })
+
+    series = []
+    for param in params:
+        values = []
+        for point in points:
+            yval = point['values'].get(param.name, current_values[param.name])
+            values.append({
+                'x': float(point['iteration']),
+                'y': float(yval),
+            })
+
+        series.append({
+            'name': param.name,
+            'is_float': param.is_float,
+            'points': values,
+        })
+
+    return {
+        'series': series,
+        'max_iteration': workload.spsa_run.iterations,
+    }

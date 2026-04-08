@@ -271,3 +271,11 @@ class SPSAParameter(Model):
 
     c_value   = FloatField() # Constants pre-computed for speed
     a_value   = FloatField()
+
+class SPSAHistory(Model):
+
+    spsa_run   = ForeignKey(SPSARun, on_delete=CASCADE, related_name='history')
+    games      = IntegerField(default=0)
+    iteration  = FloatField(default=0.0)
+    values     = JSONField(default=dict, blank=True)
+    created_at = DateTimeField(auto_now_add=True)

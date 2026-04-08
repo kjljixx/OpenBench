@@ -964,13 +964,16 @@ def api_spsa(request, workload_id, query):
     if query == 'outputs':
         return HttpResponse(OpenBench.spsa_utils.spsa_optimal_values(workload), content_type='text/plain')
 
+    if query == 'outputs_ob':
+        return HttpResponse(OpenBench.spsa_utils.spsa_optimal_values(workload, output='ob'), content_type='text/plain')
+
     if query == 'digest':
         return HttpResponse(OpenBench.spsa_utils.spsa_param_digest(workload), content_type='text/plain')
 
     if query == 'perturbation':
         return api_response({ 'perturbation' : OpenBench.spsa_utils.spsa_workload_assignment_dict(workload, 4) })
 
-    valid_endpoints = [ 'inputs', 'outputs', 'digest', 'perturbation' ]
+    valid_endpoints = [ 'inputs', 'outputs', 'outputs_ob', 'digest', 'perturbation' ]
     return api_response({ 'error' : 'Valid /query/ endpoints are: [ %s ]' % (', '.join(valid_endpoints)) })
 
 @csrf_exempt

@@ -19,6 +19,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import datetime
+import html
 import hashlib
 import json
 import math
@@ -144,6 +145,163 @@ def read_git_credentials(engine):
 
 def path_join(*args):
     return "/".join([f.lstrip("/").rstrip("/") for f in args]).rstrip('/')
+
+def _count_patch_changes(lines):
+
+    additions = 0
+    deletions = 0
+
+    for line in lines:
+        if line.startswith('+') and not line.startswith('+++'):
+            additions += 1
+        elif line.startswith('-') and not line.startswith('---'):
+            deletions += 1
+
+    return additions, deletions
+
+def _diff_line_class(line):
+
+    if line.startswith('diff --git') or line.startswith('index ') or line.startswith('@@') \
+            or line.startswith('--- ') or line.startswith('+++ ') or line.startswith('# '):
+        return 'diff-meta'
+
+    if line.startswith('+') and not line.startswith('+++'):
+        return 'diff-add'
+
+    if line.startswith('-') and not line.startswith('---'):
+        return 'diff-del'
+
+    return 'diff-context'
+
+def _render_diff_html(lines):
+
+    rendered = []
+    for line in lines:
+        line_class = _diff_line_class(line)
+        rendered.append('<span class="%s">%s</span>' % (line_class, html.escape(line)))
+
+    return '\n'.join(rendered)
+
+def test_repo_diff_text(test, max_files=10, max_patch_lines=220):
+
+    if test.test_mode == 'SPSA':
+        return None
+
+    if test.dev_engine != test.base_engine:
+        return {
+            'available': False,
+            'summary': 'Diff preview is unavailable for cross-engine tests.',
+            'patch': '',
+            'truncated': False,
+        }
+
+    if 'github.com' not in test.dev_repo.lower():
+        return {
+            'available': False,
+            'summary': 'Diff preview currently supports GitHub repositories only.',
+            'patch': '',
+            'truncated': False,
+        }
+
+    base = test.dev_repo.replace('github.com', 'api.github.com/repos')
+    url = path_join(base, 'compare', '%s...%s' % (test.base.sha, test.dev.sha))
+
+    headers = read_git_credentials(test.dev_engine) or {}
+    headers['Accept'] = 'application/vnd.github+json'
+
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            return {
+                'available': False,
+                'summary': 'Unable to fetch diff preview (HTTP %d).' % (response.status_code),
+                'patch': '',
+                'truncated': False,
+            }
+
+        payload = response.json()
+        files = payload.get('files', [])
+
+        commits = payload.get('total_commits', 0)
+        total_additions = 0
+        total_deletions = 0
+        summary = '%d commits, %d files changed, +%d/-%d' % (
+            commits,
+            len(files),
+            total_additions,
+            total_deletions,
+        )
+
+        patch_lines = []
+        truncated = False
+
+        for fdata in files[:max_files]:
+            fname = fdata.get('filename', 'unknown')
+            status = fdata.get('status', 'modified')
+            patch_body = fdata.get('patch', '').splitlines() if fdata.get('patch') else []
+
+            parsed_add, parsed_del = _count_patch_changes(patch_body)
+            api_add = int(fdata.get('additions', 0) or 0)
+            api_del = int(fdata.get('deletions', 0) or 0)
+
+            f_add = max(api_add, parsed_add)
+            f_del = max(api_del, parsed_del)
+
+            total_additions += f_add
+            total_deletions += f_del
+
+            chunk = [
+                'diff --git a/%s b/%s' % (fname, fname),
+                '# status=%s +%d -%d' % (status, f_add, f_del),
+            ]
+
+            if patch_body:
+                chunk.extend(patch_body)
+            else:
+                chunk.append('# Binary or large file patch omitted by provider')
+
+            chunk.append('')
+
+            remaining = max_patch_lines - len(patch_lines)
+            if remaining <= 0:
+                truncated = True
+                break
+
+            if len(chunk) > remaining:
+                patch_lines.extend(chunk[:remaining])
+                truncated = True
+                break
+
+            patch_lines.extend(chunk)
+
+        if not patch_lines:
+            patch_lines = ['# No patch preview available']
+
+        total_additions = max(total_additions, int(payload.get('additions', 0) or 0))
+        total_deletions = max(total_deletions, int(payload.get('deletions', 0) or 0))
+
+        summary = '%d commits, %d files changed, +%d/-%d' % (
+            commits,
+            len(files),
+            total_additions,
+            total_deletions,
+        )
+
+        return {
+            'available': True,
+            'summary': summary,
+            'patch': '\n'.join(patch_lines),
+            'patch_html': _render_diff_html(patch_lines),
+            'truncated': truncated,
+        }
+
+    except Exception:
+        return {
+            'available': False,
+            'summary': 'Failed to fetch diff preview.',
+            'patch': '',
+            'truncated': False,
+        }
 
 def extract_option(options, option):
 
@@ -485,6 +643,18 @@ def update_test(request, machine):
 
             # Bulk update to fire off all the .save()s
             SPSAParameter.objects.bulk_update(parameters, ['value'])
+
+            values = {
+                param.name: float(param.value) if param.is_float else int(round(param.value))
+                for param in parameters
+            }
+
+            SPSAHistory.objects.create(
+                spsa_run=test.spsa_run,
+                games=test.games,
+                iteration=test.games / (2 * test.spsa_run.pairs_per),
+                values=values,
+            )
 
             test.finished = test.games >= 2 * test.spsa_run.pairs_per * test.spsa_run.iterations
 

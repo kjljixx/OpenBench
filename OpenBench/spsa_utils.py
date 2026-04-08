@@ -20,7 +20,16 @@
 
 import numpy as np
 
-from OpenBench.models import SPSARun, SPSAParameter
+from OpenBench.models import SPSARun, SPSAParameter, SPSAHistory
+
+def format_spsa_value(param, value):
+
+    if not param.is_float:
+        return str(int(round(value)))
+
+    # Keep reasonable precision while avoiding trailing zeros.
+    text = ('%.6f' % (float(value))).rstrip('0').rstrip('.')
+    return text if text else '0'
 
 def spsa_original_input(workload):
 
@@ -38,10 +47,19 @@ def spsa_original_input(workload):
 
     return '\n'.join(lines)
 
-def spsa_optimal_values(workload):
+def spsa_optimal_values(workload, output='csv'):
+
+    params = list(workload.spsa_run.parameters.order_by('index'))
+
+    if output == 'ob':
+        return ' '.join([
+            '%s=%s' % (param.name, format_spsa_value(param, param.value))
+            for param in params
+        ])
+
     return '\n'.join([
-        '%s, %s' % (param.name, param.value if param.is_float else int(round(param.value)))
-        for param in workload.spsa_run.parameters.order_by('index')
+        '%s, %s' % (param.name, format_spsa_value(param, param.value))
+        for param in params
     ])
 
 def create_spsa_run(workload, request):
@@ -87,6 +105,19 @@ def create_spsa_run(workload, request):
         ))
 
     SPSAParameter.objects.bulk_create(params)
+
+    initial_values = {
+        param.name: float(param.start) if param.is_float else int(round(param.start))
+        for param in params
+    }
+
+    SPSAHistory.objects.create(
+        spsa_run=spsa_run,
+        games=0,
+        iteration=0.0,
+        values=initial_values,
+    )
+
     return spsa_run
 
 def spsa_param_digest(workload):
