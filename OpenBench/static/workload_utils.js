@@ -172,19 +172,27 @@ function draw_spsa_history_graph(history) {
   const plotW = width - margin.left - margin.right
   const plotH = height - margin.top - margin.bottom
 
-  let xMax = Number(history.max_iteration || 0)
+  let observedXMax = 0
   let yMin = Number.POSITIVE_INFINITY
   let yMax = Number.NEGATIVE_INFINITY
 
+  const xSeries = activeSeries.length ? activeSeries : history.series
+
+  xSeries.forEach(series => {
+    series.points.forEach(point => {
+      observedXMax = Math.max(observedXMax, Number(point.x))
+    })
+  })
+
   activeSeries.forEach(series => {
     series.points.forEach(point => {
-      xMax = Math.max(xMax, Number(point.x))
       yMin = Math.min(yMin, Number(point.y))
       yMax = Math.max(yMax, Number(point.y))
     })
   })
 
-  xMax = Math.max(1, xMax)
+  const xPad = Math.max(1, observedXMax * 0.03)
+  const xMax = Math.max(1, observedXMax + xPad)
   if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
     yMin = 0
     yMax = 1
