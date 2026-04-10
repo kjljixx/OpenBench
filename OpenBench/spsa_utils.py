@@ -107,7 +107,7 @@ def create_spsa_run(workload, request):
     SPSAParameter.objects.bulk_create(params)
 
     initial_values = {
-        param.name: float(param.start) if param.is_float else int(round(param.start))
+        param.name: float(param.start)
         for param in params
     }
 

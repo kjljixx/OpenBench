@@ -113,7 +113,7 @@ def fetch_spsa_history(workload, max_points=1500):
         return { 'series': [], 'max_iteration': workload.spsa_run.iterations }
 
     start_values = {
-        param.name: float(param.start) if param.is_float else int(round(param.start))
+        param.name: float(param.start)
         for param in params
     }
 
@@ -128,7 +128,7 @@ def fetch_spsa_history(workload, max_points=1500):
     points.extend(snapshots)
 
     current_values = {
-        param.name: float(param.value) if param.is_float else int(round(param.value))
+        param.name: float(param.value)
         for param in params
     }
     current_iteration = workload.games / (2 * workload.spsa_run.pairs_per)

@@ -645,7 +645,7 @@ def update_test(request, machine):
             SPSAParameter.objects.bulk_update(parameters, ['value'])
 
             values = {
-                param.name: float(param.value) if param.is_float else int(round(param.value))
+                param.name: float(param.value)
                 for param in parameters
             }
 
