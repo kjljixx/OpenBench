@@ -52,16 +52,21 @@ function spsa_series_color(index) {
   return SPSA_GRAPH_COLORS[index % SPSA_GRAPH_COLORS.length]
 }
 
-function format_axis_tick(value) {
+function format_axis_tick(value, step) {
 
   const absValue = Math.abs(value)
+  const finiteStep = Number.isFinite(step) && step > 0
+  const dynamicDecimals = finiteStep
+    ? Math.max(0, Math.min(8, Math.ceil(-Math.log10(step)) + 1))
+    : 3
+
   if (absValue >= 1000)
-    return (value / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+    return (value / 1000).toFixed(Math.min(3, dynamicDecimals)).replace(/0+$/, '').replace(/\.$/, '') + 'k'
 
   if (absValue >= 10)
-    return value.toFixed(1).replace(/\.0$/, '')
+    return value.toFixed(Math.min(4, Math.max(1, dynamicDecimals))).replace(/0+$/, '').replace(/\.$/, '')
 
-  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  return value.toFixed(Math.max(3, dynamicDecimals)).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function update_spsa_selection_summary() {
@@ -220,6 +225,7 @@ function draw_spsa_history_graph(history) {
   ctx.strokeStyle = '#242a36'
   ctx.lineWidth = 1
   const yTickCount = 4
+  const yTickStep = (yMax - yMin) / yTickCount
   for (let i = 0; i <= yTickCount; i++) {
     const y = margin.top + i * (plotH / yTickCount)
     ctx.beginPath()
@@ -232,10 +238,11 @@ function draw_spsa_history_graph(history) {
     ctx.font = '11px sans-serif'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
-    ctx.fillText(format_axis_tick(yValue), margin.left - 8, y)
+    ctx.fillText(format_axis_tick(yValue, yTickStep), margin.left - 8, y)
   }
 
   const xTickCount = 6
+  const xTickStep = xMax / xTickCount
   for (let i = 0; i <= xTickCount; i++) {
     const x = margin.left + i * (plotW / xTickCount)
     ctx.beginPath()
@@ -248,7 +255,7 @@ function draw_spsa_history_graph(history) {
     ctx.font = '11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(format_axis_tick(xValue), x, margin.top + plotH + 6)
+    ctx.fillText(format_axis_tick(xValue, xTickStep), x, margin.top + plotH + 6)
   }
 
   activeSeries.forEach((series, index) => {

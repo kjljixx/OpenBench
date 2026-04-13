@@ -7,7 +7,7 @@
         "path"      : "",
         "compilers" : ["clang++"],
         "cpuflags"  : ["AVX2"],
-        "systems"   : ["Windows", "Linux"]
+        "systems"   : ["Windows", "Linux", "Darwin"]
     },
 
     "test_presets" : {
@@ -43,6 +43,13 @@
             "both_options"      : "Hash=16 Threads=1",
             "both_time_control" : "6.0+0.06",
             "workload_size"     : 32,
+            "test_bounds"       : "[-10.00, 0.00]"
+        },
+
+        "LTC Simplify" : {
+            "both_options"      : "Hash=32 Threads=1",
+            "both_time_control" : "20.0+0.2",
+            "workload_size"     : 8,
             "test_bounds"       : "[-10.00, 0.00]"
         }
     },
