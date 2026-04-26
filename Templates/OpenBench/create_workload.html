@@ -153,6 +153,16 @@
                     <div class="row">
                         <label for="test_max_games"> Max Games </label> <input id="test_max_games" name="test_max_games">
                     </div>
+                    
+                    <div class="row">
+                        <label for="auto_schedule"> Auto Schedule </label>
+                        <select id="auto_schedule" name="auto_schedule">
+                            <option selected value="NONE"> None </option>
+                            <option value="STC_TO_LTC"> STC -> LTC </option>
+                            <option value="LTC_TO_VLTC"> LTC -> VLTC </option>
+                            <option value="RESCHEDULE"> Reschedule </option>
+                        </select>
+                    </div>
 
                 {% elif workload == "TUNE" %}
 

@@ -97,4 +97,8 @@ def tweak_workload(request, profile, workload):
             workload.workload_size = max(1, int(request.POST['workload_size']))
     except: pass
 
+    try:
+        workload.auto_schedule = request.POST['auto_schedule']
+    except: pass
+
     return 'Workload was Modified!'

@@ -173,6 +173,7 @@ def verify_engine_test_preset(test_preset):
         'syzygy_adj',
         'win_adj',
         'draw_adj',
+        'auto_schedule',
     ]
 
     for key in test_preset.keys():

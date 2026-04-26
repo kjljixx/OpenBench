@@ -558,6 +558,57 @@ def network_edit(request, engine, network):
     return OpenBench.views.redirect(request, '/networks/%s' % (network.engine), status='Applied changes')
 
 
+def schedule_succession_test(test):
+
+    # Map our enum-like strings to Preset names in the Engine config
+    mapping = {
+        'STC_TO_LTC'  : 'LTC',
+        'LTC_TO_VLTC' : 'VLTC',
+    }
+
+    # Clone the test
+    new_test = Test.objects.get(id=test.id)
+    new_test.pk = None
+    new_test.passed = new_test.failed = new_test.finished = False
+    new_test.wins = new_test.losses = new_test.draws = 0
+    new_test.WW = new_test.LL = new_test.DW = new_test.LD = new_test.DD = 0
+    new_test.games = 0
+    new_test.currentllr = 0.0
+
+    if test.auto_schedule == 'RESCHEDULE':
+        new_test.auto_schedule = 'NONE' # Don't loop forever
+        new_test.save()
+        LogEvent.objects.create(author=test.author, summary='AUTO-SCHEDULE RESCHEDULE (ID=%d)' % (test.id), log_file='', test_id=new_test.id)
+        return
+
+    preset_name = mapping.get(test.auto_schedule)
+    if not preset_name:
+        return
+
+    engine_config = OPENBENCH_CONFIG['engines'].get(test.dev_engine)
+    if not engine_config:
+        return
+
+    preset = engine_config.get('test_presets', {}).get(preset_name)
+    if not preset:
+        return
+
+    # Apply preset values
+    if 'both_time_control' in preset:
+        new_test.dev_time_control = new_test.base_time_control = TimeControl.parse(preset['both_time_control'])
+    if 'both_options' in preset:
+        new_test.dev_options = new_test.base_options = preset['both_options']
+    if 'workload_size' in preset:
+        new_test.workload_size = int(preset['workload_size'])
+    
+    # Reset auto_schedule or set to next if specified in preset
+    new_test.auto_schedule = preset.get('auto_schedule', 'NONE')
+    
+    new_test.save()
+
+    LogEvent.objects.create(author=test.author, summary='AUTO-SCHEDULE %s (ID=%d)' % (preset_name, test.id), log_file='', test_id=new_test.id)
+
+
 def update_test(request, machine):
 
     # Extract error information
@@ -664,6 +715,9 @@ def update_test(request, machine):
             test.passed = test.finished = test.games >= test.max_games
 
         test.save()
+
+        if test.finished and test.passed and test.auto_schedule != 'NONE':
+            schedule_succession_test(test)
 
         # Update Result object; No risk from concurrent access
         Result.objects.filter(id=result_id).update(

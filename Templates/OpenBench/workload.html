@@ -170,6 +170,12 @@
         <td class="td-label">Scaling</td>
         <td>{{workload.scale_method}} {{workload.scale_nps}} NPS</td>
       </tr>
+      {% if workload.auto_schedule != 'NONE' %}
+      <tr>
+        <td class="td-label">Auto Schedule</td>
+        <td>{{workload.auto_schedule}}</td>
+      </tr>
+      {% endif %}
 
       {% if type == "TUNE" %}
       <tr>
@@ -325,6 +331,16 @@
             <input value="{{workload.workload_size}}" id="workload_size" name="workload_size">
           </div>
           {% endif %}
+
+          <div class="row">
+            <label for="auto_schedule">Auto Schedule</label>
+            <select id="auto_schedule" name="auto_schedule">
+                <option {% if workload.auto_schedule == 'NONE' %}selected{% endif %} value="NONE"> None </option>
+                <option {% if workload.auto_schedule == 'STC_TO_LTC' %}selected{% endif %} value="STC_TO_LTC"> STC -> LTC </option>
+                <option {% if workload.auto_schedule == 'LTC_TO_VLTC' %}selected{% endif %} value="LTC_TO_VLTC"> LTC -> VLTC </option>
+                <option {% if workload.auto_schedule == 'RESCHEDULE' %}selected{% endif %} value="RESCHEDULE"> Reschedule </option>
+            </select>
+          </div>
 
           <!-- Edit Button: For Approvers or Test Authors -->
           {% if profile.approver or profile.user.username == workload.author %}

@@ -146,6 +146,7 @@ def create_new_test(request):
     test.scale_nps         = int(request.POST['scale_nps'])
 
     test.test_mode         = request.POST['test_mode']
+    test.auto_schedule     = request.POST.get('auto_schedule', 'NONE')
     test.awaiting          = not (dev_has_all and base_has_all)
 
     if test.test_mode == 'SPRT':

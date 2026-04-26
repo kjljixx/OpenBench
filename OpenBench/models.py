@@ -137,6 +137,7 @@ class Test(Model):
 
     # Test Mode specific values, either SPRT, GAMES, SPSA, or DATAGEN
     test_mode     = CharField(max_length=16, default='SPRT')
+    auto_schedule = CharField(max_length=16, default='NONE')
     elolower      = FloatField(default=0.0) # SPRT
     eloupper      = FloatField(default=0.0) # SPRT
     alpha         = FloatField(default=0.0) # SPRT
