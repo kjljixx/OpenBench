@@ -56,17 +56,24 @@ function format_axis_tick(value, step) {
 
   const absValue = Math.abs(value)
   const finiteStep = Number.isFinite(step) && step > 0
-  const dynamicDecimals = finiteStep
+
+  if (absValue >= 1000) {
+    const kValue = value / 1000
+    const kStep = finiteStep ? step / 1000 : 0.001
+    const decimals = finiteStep
+      ? Math.max(0, Math.min(8, Math.ceil(-Math.log10(kStep)) + 2))
+      : 3
+    return kValue.toFixed(Math.min(6, decimals)).replace(/0+$/, '').replace(/\.$/, '') + 'k'
+  }
+
+  const decimals = finiteStep
     ? Math.max(0, Math.min(8, Math.ceil(-Math.log10(step)) + 1))
     : 3
 
-  if (absValue >= 1000)
-    return (value / 1000).toFixed(Math.min(3, dynamicDecimals)).replace(/0+$/, '').replace(/\.$/, '') + 'k'
-
   if (absValue >= 10)
-    return value.toFixed(Math.min(4, Math.max(1, dynamicDecimals))).replace(/0+$/, '').replace(/\.$/, '')
+    return value.toFixed(Math.min(6, Math.max(1, decimals))).replace(/0+$/, '').replace(/\.$/, '')
 
-  return value.toFixed(Math.max(3, dynamicDecimals)).replace(/0+$/, '').replace(/\.$/, '')
+  return value.toFixed(Math.max(3, decimals)).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function update_spsa_selection_summary() {
