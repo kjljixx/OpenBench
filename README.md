@@ -1,3 +1,12 @@
+# About this Fork
+This fork was made to run the OpenBench instance for my engine [Aurora](https://github.com/kjljixx/Aurora-Chess-Engine). The instance can be found here: https://ob.kjljixx.com
+
+## Improvements
+Auto-Schedule a new test at a longer time control if and once the specified test passes.
+Graph changes in SPSA variables over the iterations of the tune.
+Change the column order of the main page to put the names of workloads first.
+Allow user-defined names for workloads (instead of just the dev branch name).
+
 # OpenBench
 
 OpenBench is an open-source Chess Engine Testing Framework for UCI engines. OpenBench provides a lightweight interface and client to facilitate running fixed-game tests as well as SPRT tests to benchmark changes to engines for performance and stability. OpenBench supports [Fischer Random Chess](https://en.wikipedia.org/wiki/Chess960).
