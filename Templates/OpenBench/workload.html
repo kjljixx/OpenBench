@@ -54,7 +54,11 @@
     <pre class="long-statblock"
       style="margin-top: 6px; max-height: 380px; overflow-y: auto; white-space: pre;">{{dev_base_diff.patch_html|default:dev_base_diff.patch|safe}}</pre>
     {% if dev_base_diff.truncated %}
-    <div class="mt-1">Diff preview truncated for readability.</div>
+    <table>
+      <tr>
+        <td class="td-label">Diff preview truncated for readability.</td>
+      </tr>
+    </table>
     {% endif %}
     {% endif %}
   </div>

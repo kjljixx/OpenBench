@@ -33,6 +33,10 @@
                 <h3> Engines </h3>
 
                 <div class="row">
+                    <label for="workload_name"> Workload Name </label> <input id="workload_name" name="workload_name" placeholder="Default: Dev branch name">
+                </div>
+
+                <div class="row">
                     <label for="dev_engine"> {{dev_text}} Engine </label>
                     <select id="dev_engine" name="dev_engine" onchange="change_engine(value, 'dev', '{{workload}}');">
                         {% for engine in config.engines %}

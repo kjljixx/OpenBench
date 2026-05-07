@@ -95,6 +95,7 @@ class Test(Model):
         BOTH = 'BOTH', 'BOTH'
 
     # Misc information
+    name        = CharField(max_length=128, blank=True)
     author      = CharField(max_length=64)
     upload_pgns = CharField(max_length=16, default='FALSE')
 

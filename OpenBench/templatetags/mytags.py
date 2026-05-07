@@ -145,6 +145,9 @@ def prettyName(name):
 
 def prettyDevName(test):
 
+    if test.name:
+        return test.name
+
     # If engines are different, use the base name + branch
     if test.dev_engine != test.base_engine:
         return '[%s] %s' % (test.base_engine, test.base.name)
