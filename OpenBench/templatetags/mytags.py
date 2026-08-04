@@ -51,18 +51,14 @@ def twoDigitPrecision(value):
 
 def gitDiffLink(test):
 
-    engines = OpenBench.config.OPENBENCH_CONFIG['engines']
-
-    if test.dev_engine in engines and engines[test.dev_engine]['private']:
-        repo = OpenBench.config.OPENBENCH_CONFIG['engines'][test.dev_engine]['source']
-    else:
-        repo = OpenBench.utils.path_join(*test.dev.source.split('/')[:-2])
+    repo = OpenBench.utils.path_join(*test.dev.source.split('/')[:-2])
+    repo = repo.replace('://api.github.com', '://github.com').replace('/repos/', '/')
 
     if test.test_mode == 'SPSA':
         return OpenBench.utils.path_join(repo, 'compare', test.dev.sha[:8])
 
     return OpenBench.utils.path_join(repo, 'compare',
-        '{0}..{1}'.format( test.base.sha[:8], test.dev.sha[:8]))
+        '{0}..{1}'.format(test.base.sha[:8], test.dev.sha[:8]))
 
 def shortStatBlock(test):
 

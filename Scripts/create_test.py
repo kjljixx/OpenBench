@@ -35,6 +35,7 @@ data = {
 
     'book_name'  : '',
     'upload_pgns': 'FALSE',
+    'info'       : '',
 
     'test_mode'       : 'SPRT',
     'test_bounds'     : '[0.00, 3.00]',

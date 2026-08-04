@@ -26,7 +26,7 @@ import traceback
 
 from OpenSite.settings import PROJECT_PATH
 
-OPENBENCH_STATIC_VERSION = 'v26'
+OPENBENCH_STATIC_VERSION = 'v27'
 
 OPENBENCH_CONFIG          = None # Initialized by OpenBench/apps.py
 OPENBENCH_CONFIG_CHECKSUM = None # Initialized by OpenBench/apps.py
@@ -128,14 +128,13 @@ def verify_engine_build(engine_name, conf):
     assert type(conf['build'].get('systems')) == list
     assert all(type(x) == str for x in conf['build']['systems'])
 
+    assert type(conf['build'].get('path')) == str
+    assert type(conf['build'].get('compilers')) == list
+    assert all(type(x) == str for x in conf['build']['compilers'])
+
     if conf['private']: # Private engines require a PAT
         fname = 'credentials.%s' % (engine_name.replace(' ', '').lower())
         assert os.path.exists(os.path.join(PROJECT_PATH, 'Config', fname))
-
-    else: # Public engines require a Makefile path and valid compilers
-        assert type(conf['build'].get('path')) == str
-        assert type(conf['build'].get('compilers')) == list
-        assert all(type(x) == str for x in conf['build']['compilers'])
 
 def verify_engine_test_preset(test_preset):
 
