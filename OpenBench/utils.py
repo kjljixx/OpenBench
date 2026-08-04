@@ -560,12 +560,6 @@ def network_edit(request, engine, network):
 
 def schedule_succession_test(test):
 
-    # Map our enum-like strings to Preset names in the Engine config
-    mapping = {
-        'STC_TO_LTC'  : 'LTC',
-        'LTC_TO_VLTC' : 'VLTC',
-    }
-
     # Clone the test
     new_test = Test.objects.get(id=test.id)
     new_test.pk = None
@@ -581,7 +575,7 @@ def schedule_succession_test(test):
         LogEvent.objects.create(author=test.author, summary='AUTO-SCHEDULE RESCHEDULE (ID=%d)' % (test.id), log_file='', test_id=new_test.id)
         return
 
-    preset_name = mapping.get(test.auto_schedule)
+    preset_name = test.auto_schedule
     if not preset_name:
         return
 

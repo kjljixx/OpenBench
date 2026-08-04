@@ -1,48 +1,59 @@
 import requests
 
 # Basic Information:
-# Test options must contain 'Threads={} Hash={}'
-# Test Modes may either be of type 'SPRT' or 'GAMES'
-# Syzygy settings are { 'OPTIONAL', 'REQUIRED', 'DISABLED' }
-# Max Games is ignored unless test is of type 'GAMES'
-# Networks must be assigned using their SHA256, not their name
-# Networks with the value '' are used for tests without Networks
+# Options must contain 'Threads={} Hash={}'
+# test_mode may be 'SPRT' or 'GAMES'
+# Networks are assigned by SHA256 (8 hex chars); use '' for no network
+# Syzygy settings are OPTIONAL / DISABLED / N-MAN
+# auto_schedule: NONE, a preset name (e.g. LTC), or RESCHEDULE
 
-URL = 'http://chess.grantnet.us/scripts/'
+URL = 'https://ob.kjljixx.com/scripts/'
 
 data = {
 
-    'enginename'  : '',
-    'source'      : '',
+    'username' : '',
+    'password' : '',
+    'action'   : 'CREATE_TEST',
 
-    'devbench'    : '',
-    'devbranch'   : '',
-    'devoptions'  : '',
-    'devnetwork'  : '',
+    'workload_name' : '',
 
-    'basebench'   : '',
-    'basebranch'  : '',
-    'baseoptions' : '',
-    'basenetwork' : '',
+    'dev_engine'       : '',
+    'dev_repo'         : '',
+    'dev_branch'       : '',
+    'dev_bench'        : 'Autofill',
+    'dev_network'      : '',
+    'dev_options'      : 'Threads=1 Hash=8',
+    'dev_time_control' : '',
 
-    'bookname'    : '',
-    'timecontrol' : '',
+    'base_engine'       : '',
+    'base_repo'         : '',
+    'base_branch'       : '',
+    'base_bench'        : 'Autofill',
+    'base_network'      : '',
+    'base_options'      : 'Threads=1 Hash=8',
+    'base_time_control' : '',
 
-    'test_mode'   : '',
-    'bounds'      : '',
-    'confidence'  : '',
-    'max_games'   : '',
+    'book_name'  : '',
+    'upload_pgns': 'FALSE',
 
-    'priority'    : '',
-    'throughput'  : '',
-    'syzygy_adj'  : '',
-    'syzygy_wdl'  : '',
+    'test_mode'       : 'SPRT',
+    'test_bounds'     : '[0.00, 3.00]',
+    'test_confidence' : '[0.05, 0.05]',
+    'test_max_games'  : '0',
 
-    'username'    : '',
-    'password'    : '',
-    'action'      : 'CREATE_TEST',
+    'priority'      : '0',
+    'throughput'    : '1000',
+    'workload_size' : '32',
+    'auto_schedule' : 'NONE',
+
+    'scale_method' : 'BASE',
+    'scale_nps'    : '',
+
+    'syzygy_wdl' : 'OPTIONAL',
+    'syzygy_adj' : 'OPTIONAL',
+    'win_adj'    : 'movecount=3 score=400',
+    'draw_adj'   : 'movenumber=40 movecount=8 score=10',
 }
 
 r = requests.post(URL, data=data)
-
-print(r.text)
+print(r.status_code, r.json())

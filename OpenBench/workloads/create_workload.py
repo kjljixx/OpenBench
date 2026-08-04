@@ -32,6 +32,7 @@
 import math
 
 from django.db import transaction
+from django.http import JsonResponse
 
 import OpenBench.spsa_utils
 import OpenBench.utils
@@ -45,10 +46,17 @@ def create_workload(request, workload_type):
 
     assert workload_type in [ 'TEST', 'TUNE', 'DATAGEN' ]
 
+    # Scripted creation via POST /scripts/ with action=CREATE_TEST
+    scripted = request.POST.get('action') == 'CREATE_TEST'
+
     if not request.user.is_authenticated:
+        if scripted:
+            return JsonResponse({ 'error' : 'Only enabled users can create tests' }, status=401)
         return OpenBench.views.redirect(request, '/login/', error='Only enabled users can create tests')
 
     if not Profile.objects.get(user=request.user).enabled:
+        if scripted:
+            return JsonResponse({ 'error' : 'Only enabled users can create tests' }, status=401)
         return OpenBench.views.redirect(request, '/login/', error='Only enabled users can create tests')
 
     if request.method == 'GET':
@@ -88,6 +96,8 @@ def create_workload(request, workload_type):
         workload, errors = create_new_datagen(request)
 
     if errors != [] and errors != None:
+        if scripted:
+            return JsonResponse({ 'error' : '\n'.join(errors) }, status=400)
         paths = { 'TEST' : '/test/new/', 'TUNE' : '/tune/new/', 'DATAGEN' : '/datagen/new/' }
         return OpenBench.views.redirect(request, paths[workload_type], error='\n'.join(errors))
 
@@ -101,6 +111,12 @@ def create_workload(request, workload_type):
 
     if not OPENBENCH_CONFIG['use_cross_approval'] and profile.approver:
         workload.approved = True; workload.save()
+
+    if scripted:
+        payload = { 'workload_id' : workload.id }
+        if warning:
+            payload['warning'] = warning
+        return JsonResponse(payload)
 
     return OpenBench.views.redirect(request, '/index/', warning=warning)
 

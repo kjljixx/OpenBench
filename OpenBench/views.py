@@ -27,6 +27,7 @@ import django.contrib.auth
 import OpenBench.config
 import OpenBench.model_utils
 import OpenBench.spsa_utils
+import OpenBench.stats
 import OpenBench.utils
 
 from OpenBench.workloads.create_workload import create_workload
@@ -985,8 +986,51 @@ def api_workload_results(request, workload_id):
     try: workload = Test.objects.get(pk=workload_id)
     except: return api_response({ 'error' : 'Requested Workload Id does not exist' })
 
-    truncated, results_json = fetch_results(workload_id, force=True)
-    return JsonResponse({'results' : results_json})
+    truncated, results_json = fetch_results(workload, force=True)
+
+    lower, elo, upper = (0.00, 0.00, 0.00)
+    if workload.test_mode != 'SPSA':
+        lower, elo, upper = OpenBench.stats.Elo(workload.results())
+
+    return JsonResponse({
+        'workload': {
+            'id'           : workload.id,
+            'name'         : workload.name,
+            'author'       : workload.author,
+            'type'         : workload.workload_type_str(),
+            'test_mode'    : workload.test_mode,
+            'dev'          : workload.dev.name,
+            'base'         : workload.base.name,
+            'dev_engine'   : workload.dev_engine,
+            'base_engine'  : workload.base_engine,
+            'time_control' : workload.dev_time_control,
+            'games'        : workload.games,
+            'wins'         : workload.wins,
+            'losses'       : workload.losses,
+            'draws'        : workload.draws,
+            'trinomial'    : list(workload.as_tri()),
+            'pentanomial'  : list(workload.as_penta()),
+            'use_penta'    : workload.use_penta,
+            'elo'          : elo,
+            'elo_error'    : max(upper - elo, elo - lower),
+            'currentllr'   : workload.currentllr,
+            'lowerllr'     : workload.lowerllr,
+            'upperllr'     : workload.upperllr,
+            'elolower'     : workload.elolower,
+            'eloupper'     : workload.eloupper,
+            'max_games'    : workload.max_games,
+            'passed'       : workload.passed,
+            'failed'       : workload.failed,
+            'finished'     : workload.finished,
+            'deleted'      : workload.deleted,
+            'approved'     : workload.approved,
+            'awaiting'     : workload.awaiting,
+            'error'        : workload.error,
+            'creation'     : workload.creation.timestamp(),
+            'updated'      : workload.updated.timestamp(),
+        },
+        'results': results_json,
+    })
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                                BUSINESS VIEWS                               #
