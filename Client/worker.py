@@ -61,7 +61,7 @@ from client import try_forever
 
 ## Basic configuration of the Client. These timeouts can be changed at will
 
-CLIENT_VERSION   = 49 # Client version to send to the Server
+CLIENT_VERSION   = 50 # Client version to send to the Server
 TIMEOUT_HTTP     = 30 # Timeout in seconds for HTTP requests
 TIMEOUT_ERROR    = 60 # Timeout in seconds when any errors are thrown
 TIMEOUT_WORKLOAD = 60 # Timeout in seconds between workload requests
@@ -116,6 +116,8 @@ class Configuration:
         self.fleet       = args.fleet    if args.fleet    else False
         self.noisy       = args.noisy    if args.noisy    else False
         self.focus       = args.focus    if args.focus    else []
+        self.only        = args.only     if args.only     else []
+        self.cli_options = args.cli_options
 
     def check_requirements(self):
 
@@ -372,6 +374,22 @@ class ServerReporter:
         return ServerReporter.report(config, 'clientHeartbeat', payload)
 
     @staticmethod
+    def report_nps_stats(config, stats):
+
+        payload = {
+            'test_id'          : config.workload['test']['id'],
+            'result_id'        : config.workload['result']['id'],
+            'dev_nodes'        : int(stats['dev' ]['nodes'      ]),
+            'dev_time'         : int(stats['dev' ]['time'       ]),
+            'dev_time_scaled'  : int(stats['dev' ]['time_scaled']),
+            'base_nodes'       : int(stats['base']['nodes'      ]),
+            'base_time'        : int(stats['base']['time'       ]),
+            'base_time_scaled' : int(stats['base']['time_scaled']),
+        }
+
+        return ServerReporter.report(config, 'clientSubmitNPSStats', payload)
+
+    @staticmethod
     def report_pgn(config, compressed_pgn_text):
 
         payload = {
@@ -498,7 +516,7 @@ class MatchRunner:
 
     @staticmethod
     def pgnout_settings(config, timestamp, runner_idx):
-        match_line = '^info depth *'
+        match_line = '^info string pgncomment .*'
         return '-pgnout file=%s seldepth=true nodes=true match_line=%s' % (
             MatchRunner.pgn_name(config, timestamp, runner_idx), shlex.quote(match_line))
 
@@ -1016,6 +1034,8 @@ def server_configure_worker(config):
         'syzygy_max'     : config.syzygy_max,     # Whether or not the machine has Syzygy support
         'noisy'          : config.noisy,          # Whether our results are unstable for time-based workloads
         'focus'          : config.focus,          # List of engines we have a preference to help
+        'only'           : config.only,           # List of engines we are willing to help, exclusively
+        'cli_options'    : config.cli_options,    # Command line options except for credentials and server
         'cxx_comp'       : config.cxx_comp,       # C++ Compiler used to build Fastchess binaries
         'fastchess_ver'  : config.fastchess_ver,  # Fastchess Version, set during server_configure_fastchess()
         'client_ver'     : CLIENT_VERSION,        # Version of the Client, which the server may reject
@@ -1134,10 +1154,15 @@ def complete_workload(config):
             MatchRunner.kill_everything(dev_name, base_name)
             raise
 
+        pgn_files = [MatchRunner.pgn_name(config, timestamp, x) for x in range(runner_cnt)]
+
+        # Submit NPS stats
+        if config.workload['test']['type'] in ('SPRT', 'GAMES'):
+            ServerReporter.report_nps_stats(config, pgn_util.collect_nps_stats(pgn_files, scale_factor))
+
         # Upload the PGN if requested
         if config.workload['test']['upload_pgns'] != 'FALSE':
-            compact    = config.workload['test']['upload_pgns'] == 'COMPACT'
-            pgn_files  = [MatchRunner.pgn_name(config, timestamp, x) for x in range(runner_cnt)]
+            compact = config.workload['test']['upload_pgns'] == 'COMPACT'
             ServerReporter.report_pgn(config, pgn_util.compress_pgn_files(pgn_files, scale_factor, compact))
 
 def safe_download_network_weights(config, branch):
@@ -1328,12 +1353,28 @@ def parse_arguments(client_args):
     p.add_argument(      '--fleet'   , help='Fleet Mode'                  , action='store_true')
     p.add_argument(      '--noisy'   , help='Reject time-based workloads' , action='store_true')
     p.add_argument(      '--focus'   , help='Prefer certain engine(s)'    , nargs='+'          )
+    p.add_argument(      '--only'    , help='Only help certain engine(s)' , nargs='+'          )
 
     # Ignore unknown arguments ( from client )
-    worker_args, unknown = p.parse_known_args()
+    worker_args, unknown    = p.parse_known_args()
+    worker_args.cli_options = format_cli_options(worker_args)
 
     # Add the client args (Username, Password, and Server) to the worker args
     return argparse.Namespace(**{ **vars(client_args), **vars(worker_args) })
+
+def format_cli_options(worker_args):
+
+    options = []
+
+    for name, value in vars(worker_args).items():
+        if isinstance(value, list):
+            options.append('--%s %s' % (name, ' '.join(map(str, value))))
+        elif value is True:
+            options.append('--%s' % name)
+        elif value:
+            options.append('--%s %s' % (name, value))
+
+    return ' '.join(options)
 
 def run_openbench_worker(client_args):
 
