@@ -20,3 +20,6 @@ Media/Events/*
 
 *.lock
 *.epd
+Scripts/ob_notify.config
+Scripts/ob_notify.state
+Scripts/ob_notify.log
