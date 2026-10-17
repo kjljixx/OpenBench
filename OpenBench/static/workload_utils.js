@@ -357,11 +357,11 @@ function format_cpu_name(name) {
     // Drop the (R) registered-trademark marker.
     name = name.replace(/\(R\)/g, '');
 
-    // "Intel Xeon" is redundant GÇö Xeon already implies Intel, so drop Intel.
+    // "Intel Xeon" is redundant G?? Xeon already implies Intel, so drop Intel.
     if (/Intel/.test(name) && /Xeon/.test(name))
         name = name.replace(/Intel/g, '');
 
-    // Likewise, "AMD EPYC" is redundant GÇö EPYC already implies AMD.
+    // Likewise, "AMD EPYC" is redundant G?? EPYC already implies AMD.
     if (/AMD/.test(name) && /EPYC/.test(name))
         name = name.replace(/AMD/g, '');
 
@@ -468,11 +468,13 @@ async function fetch_spsa_digest(workload_id) {
     buttonContainer.style.display = 'none'
 }
 
-if (window.spsaHistory)
-  initialize_spsa_history_graph(window.spsaHistory)
-
 window.addEventListener('resize', function () {
   if (window.spsaHistory)
     draw_spsa_history_graph(window.spsaHistory)
+})
+
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.spsaHistory)
+    initialize_spsa_history_graph(window.spsaHistory)
 })
 
